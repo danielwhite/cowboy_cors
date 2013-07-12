@@ -36,5 +36,3 @@ arguments, and return a three-tuple of the from `{Value, Req, State}`.
   global policy.
 
 * Test suite.
-
-* Example application.
