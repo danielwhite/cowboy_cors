@@ -25,10 +25,10 @@ arguments, and return a three-tuple of the from `{Value, Req, State}`.
 | cors_allowed_origins   | `[]`                      |
 | cors_allow_credentials | `false`                   |
 | cors_exposed_headers   | `[]`                      |
+| cors_allowed_headers   | `[]`                      |
+| cors_allowed_methods   | `[]`                      |
 
 # Todo
-
-* Support for preflight requests.
 
 * Allow wildcard response for `cors_allowed_credentials`.
 
