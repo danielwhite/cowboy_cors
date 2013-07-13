@@ -1,0 +1,8 @@
+language: erlang
+notifications:
+  email:
+    - daniel@whitehouse.id.au
+otp_release:
+  R16B01
+  R15B03
+script: "make test"
