@@ -37,9 +37,7 @@ origin_present(Req, State) ->
 policy_init(Req, State = #state{policy = Policy}) ->
     try Policy:policy_init(Req) of
         {ok, Req1, PolicyState} ->
-            allowed_origins(Req1, State#state{policy_state = PolicyState});
-        {shutdown, Req1} ->
-            terminate(Req1, State)
+            allowed_origins(Req1, State#state{policy_state = PolicyState})
     catch Class:Reason ->
                 error_logger:error_msg(
                   "** Cowboy CORS policy ~p terminating in ~p/~p~n"

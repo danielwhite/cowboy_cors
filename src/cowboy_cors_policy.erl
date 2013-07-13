@@ -4,5 +4,4 @@
 
 -callback policy_init(Req)
         -> {ok, Req, state()}
-        | {shutdown, Req}
         when Req :: cowboy_req:req().
