@@ -7,6 +7,7 @@
 -export([exposed_headers/2]).
 -export([allowed_headers/2]).
 -export([allowed_methods/2]).
+-export([max_age/2]).
 
 policy_init(Req) ->
     {ok, Req, undefined_state}.
@@ -35,6 +36,10 @@ allowed_methods(Req, State) ->
     {Allowed, Req1} = parse_list(<<"allowed_methods">>, Req),
     {Allowed, Req1, State}.
 
+max_age(Req, State) ->
+    {MaxAge, Req1} = parse_integer(<<"max_age">>, Req),
+    {MaxAge, Req1, State}.
+
 parse_list(Name, Req) ->
     case cowboy_req:qs_val(Name, Req) of
         {undefined, Req1} ->
@@ -52,4 +57,14 @@ parse_boolean(Name, Req, Default) ->
             {true, Req1};
         {<<"false">>, Req1} ->
             {false, Req1}
+    end.
+
+parse_integer(Name, Req) ->
+    case cowboy_req:qs_val(Name, Req) of
+        {undefined, Req1} ->
+            {undefined, Req1};
+        {Bin, Req1} ->
+            String = binary_to_list(Bin),
+            {MaxAge, []} = string:to_integer(String),
+            {MaxAge, Req1}
     end.

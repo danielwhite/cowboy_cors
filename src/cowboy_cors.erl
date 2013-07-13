@@ -88,7 +88,19 @@ request_headers(Req, State) ->
         {error, badarg} ->
             terminate(Req1, State);
         List ->
-            allowed_methods(Req1, State#state{request_headers = List})
+            max_age(Req1, State#state{request_headers = List})
+    end.
+
+%% max_age/2 should return a non-negative integer or the atom undefined
+max_age(Req, State) ->
+    case call(Req, State, max_age, undefined) of
+        {MaxAge, Req1, PolicyState}
+          when is_integer(MaxAge) andalso MaxAge >= 0 ->
+            MaxAgeBin = list_to_binary(integer_to_list(MaxAge)),
+            Req2 = cowboy_req:set_resp_header(<<"access-control-max-age">>, MaxAgeBin, Req1),
+            allowed_methods(Req2, State#state{policy_state = PolicyState});
+        {undefined, Req1, PolicyState} ->
+            allowed_methods(Req1, State#state{policy_state = PolicyState})
     end.
 
 %% allow_methods/2 should return a list of binary method names
