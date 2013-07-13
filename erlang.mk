@@ -146,8 +146,8 @@ CT_RUN = ct_run \
 	-noshell \
 	-pa ebin $(DEPS_DIR)/*/ebin \
 	-dir test \
-	-logdir logs
-#	-cover test/cover.spec
+	-logdir logs \
+	-cover test/cover.spec
 
 CT_SUITES ?=
 CT_SUITES_FULL = $(addsuffix _SUITE,$(CT_SUITES))
