@@ -22,19 +22,17 @@ arguments, and return a three-tuple of the from `{Value, Req, State}`.
 
 | Callback name          | Default value             |
 | ---------------------- | ------------------------- |
-| cors_allowed_origins   | `[]`                      |
-| cors_allow_credentials | `false`                   |
-| cors_exposed_headers   | `[]`                      |
-| cors_allowed_headers   | `[]`                      |
-| cors_allowed_methods   | `[]`                      |
+| allowed_origins        | `[]`                      |
+| allow_credentials      | `false`                   |
+| exposed_headers        | `[]`                      |
+| allowed_headers        | `[]`                      |
+| allowed_methods        | `[]`                      |
 
 # Todo
 
-* Allow wildcard response for `cors_allowed_credentials`.
+* Allow wildcard response for `allowed_credentials`.
 
 * Provide callback to set the `Access-Control-Max-Age` header.
-
-* Simplify callback names for policies (more like cowboy_rest).
 
 * Allow individual handlers to provide policy, rather than just a
   global policy.

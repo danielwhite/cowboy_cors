@@ -35,33 +35,27 @@ origin_present(Req, State) ->
     end.
 
 policy_init(Req, State = #state{policy = Policy}) ->
-    try Policy:cors_policy_init(Req) of
+    try Policy:policy_init(Req) of
         {ok, Req1, PolicyState} ->
-            allowed_origins(Req1, State#state{policy_state = PolicyState});
-        {shutdown, Req1} ->
-            terminate(Req1, State)
+            allowed_origins(Req1, State#state{policy_state = PolicyState})
     catch Class:Reason ->
                 error_logger:error_msg(
                   "** Cowboy CORS policy ~p terminating in ~p/~p~n"
                   "   for the reason ~p:~p~n"
                   "** Request was ~p~n** Stacktrace: ~p~n~n",
-                  [Policy, cors_policy_init, 1, Class, Reason,
+                  [Policy, policy_init, 1, Class, Reason,
                    cowboy_req:to_list(Req), erlang:get_stacktrace()]),
             error_terminate(Req, State)
     end.
 
 allowed_origins(Req, State = #state{origin = Origin}) ->
-    case call(Req, State, cors_allowed_origins) of
-        no_call ->
-            terminate(Req, State);
-        {List, Req1, PolicyState} ->
-            case lists:member(Origin, List) of
-                true ->
-                    %% both models are identical prior to this point
-                    choose_processing_model(Req1, State#state{policy_state = PolicyState});
-                false ->
-                    terminate(Req, State#state{policy_state = PolicyState})
-            end
+    {List, Req1, PolicyState} = call(Req, State, allowed_origins, []),
+    case lists:member(Origin, List) of
+        true ->
+            %% both models are identical prior to this point
+            choose_processing_model(Req1, State#state{policy_state = PolicyState});
+        false ->
+            terminate(Req, State#state{policy_state = PolicyState})
     end.
 
 %% select either simple or preflight request processing model
@@ -104,30 +98,20 @@ request_headers(Req, State) ->
 
 %% allow_methods/2 should return a list of binary method names
 allowed_methods(Req, State = #state{request_method = Method}) ->
-    case call(Req, State, cors_allowed_methods) of
-        no_call ->
-            terminate(Req, State);
-        {List, Req1, PolicyState} ->
-            case lists:member(Method, List) of
-                false ->
-                    terminate(Req1, State#state{policy_state = PolicyState});
-                true ->
-                    allowed_headers(Req1, State#state{policy_state = PolicyState})
-            end
+    {List, Req1, PolicyState} = call(Req, State, allowed_methods, []),
+    case lists:member(Method, List) of
+        false ->
+            terminate(Req1, State#state{policy_state = PolicyState});
+        true ->
+            allowed_headers(Req1, State#state{policy_state = PolicyState})
     end.
 
 allowed_headers(Req, State = #state{request_headers = Requested}) ->
-    case call(Req, State, cors_allowed_headers) of
-        no_call ->
-            check_allowed_headers(Requested, [], Req, State);
-        {List, Req1, PolicyState} ->
-            check_allowed_headers(Requested, List, Req1, State#state{policy_state = PolicyState})
-    end.
+    {List, Req1, PolicyState} = call(Req, State, allowed_headers, []),
+    check_allowed_headers(Requested, List, Req1, State#state{policy_state = PolicyState}).
 
 check_allowed_headers([], _, Req, State) ->
     set_preflight_headers(Req, State);
-check_allowed_headers(_, [], Req, State) ->
-    terminate(Req, State);
 check_allowed_headers([<<"origin">>|Tail], Allowed, Req, State) ->
     %% KLUDGE: for browsers that include this header, but don't
     %% actually check it (i.e. Webkit).  Given that the 'Origin'
@@ -163,7 +147,7 @@ set_allow_headers(Req, State) ->
 
 %% allow_credentials/1 should return true or false.
 allow_credentials(Req, State) ->
-    expect(Req, State, cors_allow_credentials, false,
+    expect(Req, State, allow_credentials, false,
            fun if_not_allow_credentials/2, fun if_allow_credentials/2).
 
 %% If credentials are allowed, then the value of
@@ -181,7 +165,7 @@ if_not_allow_credentials(Req, State = #state{origin = Origin}) ->
 
 %% exposed_headers/2 should return a list of binary header names.
 exposed_headers(Req, State) ->
-    case call(Req, State, cors_exposed_headers) of
+    case call(Req, State, exposed_headers) of
         no_call ->
             terminate(Req, State);
         {List, Req1, PolicyState} ->
@@ -196,16 +180,17 @@ set_exposed_headers(Req, [Header|Tail]) ->
     set_exposed_headers(Req1, Tail).
 
 expect(Req, State, Callback, Expected, OnTrue, OnFalse) ->
-    case call(Req, State, Callback) of
-        no_call ->
-            OnTrue(Req, State);
+    case call(Req, State, Callback, Expected) of
         {Expected, Req1, PolicyState} ->
             OnTrue(Req1, State#state{policy_state = PolicyState});
         {_Unexpected, Req1, PolicyState} ->
             OnFalse(Req1, State#state{policy_state = PolicyState})
     end.
 
-call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback) ->
+call(Req, State, Callback) ->
+    call(Req, State, Callback, no_call).
+
+call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback, Default) ->
     case erlang:function_exported(Policy, Callback, 2) of
         true ->
             try
@@ -220,7 +205,7 @@ call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback)
                     error_terminate(Req, State)
             end;
         false ->
-            no_call
+            {Default, Req, PolicyState}
     end.
 
 terminate(Req, #state{env = Env}) ->
