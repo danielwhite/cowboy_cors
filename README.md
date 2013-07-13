@@ -32,7 +32,9 @@ arguments, and return a three-tuple of the from `{Value, Req, State}`.
 
 * Allow wildcard response for `cors_allowed_credentials`.
 
+* Provide callback to set the `Access-Control-Max-Age` header.
+
+* Simplify callback names for policies (more like cowboy_rest).
+
 * Allow individual handlers to provide policy, rather than just a
   global policy.
-
-* Test suite.
