@@ -51,17 +51,13 @@ policy_init(Req, State = #state{policy = Policy}) ->
     end.
 
 allowed_origins(Req, State = #state{origin = Origin}) ->
-    case call(Req, State, cors_allowed_origins) of
-        no_call ->
-            terminate(Req, State);
-        {List, Req1, PolicyState} ->
-            case lists:member(Origin, List) of
-                true ->
-                    %% both models are identical prior to this point
-                    choose_processing_model(Req1, State#state{policy_state = PolicyState});
-                false ->
-                    terminate(Req, State#state{policy_state = PolicyState})
-            end
+    {List, Req1, PolicyState} = call(Req, State, cors_allowed_origins, []),
+    case lists:member(Origin, List) of
+        true ->
+            %% both models are identical prior to this point
+            choose_processing_model(Req1, State#state{policy_state = PolicyState});
+        false ->
+            terminate(Req, State#state{policy_state = PolicyState})
     end.
 
 %% select either simple or preflight request processing model
@@ -104,25 +100,17 @@ request_headers(Req, State) ->
 
 %% allow_methods/2 should return a list of binary method names
 allowed_methods(Req, State = #state{request_method = Method}) ->
-    case call(Req, State, cors_allowed_methods) of
-        no_call ->
-            terminate(Req, State);
-        {List, Req1, PolicyState} ->
-            case lists:member(Method, List) of
-                false ->
-                    terminate(Req1, State#state{policy_state = PolicyState});
-                true ->
-                    allowed_headers(Req1, State#state{policy_state = PolicyState})
-            end
+    {List, Req1, PolicyState} = call(Req, State, cors_allowed_methods, []),
+    case lists:member(Method, List) of
+        false ->
+            terminate(Req1, State#state{policy_state = PolicyState});
+        true ->
+            allowed_headers(Req1, State#state{policy_state = PolicyState})
     end.
 
 allowed_headers(Req, State = #state{request_headers = Requested}) ->
-    case call(Req, State, cors_allowed_headers) of
-        no_call ->
-            check_allowed_headers(Requested, [], Req, State);
-        {List, Req1, PolicyState} ->
-            check_allowed_headers(Requested, List, Req1, State#state{policy_state = PolicyState})
-    end.
+    {List, Req1, PolicyState} = call(Req, State, cors_allowed_headers, []),
+    check_allowed_headers(Requested, List, Req1, State#state{policy_state = PolicyState}).
 
 check_allowed_headers([], _, Req, State) ->
     set_preflight_headers(Req, State);
@@ -194,16 +182,17 @@ set_exposed_headers(Req, [Header|Tail]) ->
     set_exposed_headers(Req1, Tail).
 
 expect(Req, State, Callback, Expected, OnTrue, OnFalse) ->
-    case call(Req, State, Callback) of
-        no_call ->
-            OnTrue(Req, State);
+    case call(Req, State, Callback, Expected) of
         {Expected, Req1, PolicyState} ->
             OnTrue(Req1, State#state{policy_state = PolicyState});
         {_Unexpected, Req1, PolicyState} ->
             OnFalse(Req1, State#state{policy_state = PolicyState})
     end.
 
-call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback) ->
+call(Req, State, Callback) ->
+    call(Req, State, Callback, no_call).
+
+call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback, Default) ->
     case erlang:function_exported(Policy, Callback, 2) of
         true ->
             try
@@ -218,7 +207,7 @@ call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback)
                     error_terminate(Req, State)
             end;
         false ->
-            no_call
+            {Default, Req, PolicyState}
     end.
 
 terminate(Req, #state{env = Env}) ->
