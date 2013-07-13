@@ -35,7 +35,7 @@ origin_present(Req, State) ->
     end.
 
 policy_init(Req, State = #state{policy = Policy}) ->
-    try Policy:cors_policy_init(Req) of
+    try Policy:policy_init(Req) of
         {ok, Req1, PolicyState} ->
             allowed_origins(Req1, State#state{policy_state = PolicyState});
         {shutdown, Req1} ->
@@ -45,13 +45,13 @@ policy_init(Req, State = #state{policy = Policy}) ->
                   "** Cowboy CORS policy ~p terminating in ~p/~p~n"
                   "   for the reason ~p:~p~n"
                   "** Request was ~p~n** Stacktrace: ~p~n~n",
-                  [Policy, cors_policy_init, 1, Class, Reason,
+                  [Policy, policy_init, 1, Class, Reason,
                    cowboy_req:to_list(Req), erlang:get_stacktrace()]),
             error_terminate(Req, State)
     end.
 
 allowed_origins(Req, State = #state{origin = Origin}) ->
-    {List, Req1, PolicyState} = call(Req, State, cors_allowed_origins, []),
+    {List, Req1, PolicyState} = call(Req, State, allowed_origins, []),
     case lists:member(Origin, List) of
         true ->
             %% both models are identical prior to this point
@@ -100,7 +100,7 @@ request_headers(Req, State) ->
 
 %% allow_methods/2 should return a list of binary method names
 allowed_methods(Req, State = #state{request_method = Method}) ->
-    {List, Req1, PolicyState} = call(Req, State, cors_allowed_methods, []),
+    {List, Req1, PolicyState} = call(Req, State, allowed_methods, []),
     case lists:member(Method, List) of
         false ->
             terminate(Req1, State#state{policy_state = PolicyState});
@@ -109,7 +109,7 @@ allowed_methods(Req, State = #state{request_method = Method}) ->
     end.
 
 allowed_headers(Req, State = #state{request_headers = Requested}) ->
-    {List, Req1, PolicyState} = call(Req, State, cors_allowed_headers, []),
+    {List, Req1, PolicyState} = call(Req, State, allowed_headers, []),
     check_allowed_headers(Requested, List, Req1, State#state{policy_state = PolicyState}).
 
 check_allowed_headers([], _, Req, State) ->
@@ -149,7 +149,7 @@ set_allow_headers(Req, State) ->
 
 %% allow_credentials/1 should return true or false.
 allow_credentials(Req, State) ->
-    expect(Req, State, cors_allow_credentials, false,
+    expect(Req, State, allow_credentials, false,
            fun if_not_allow_credentials/2, fun if_allow_credentials/2).
 
 %% If credentials are allowed, then the value of
@@ -167,7 +167,7 @@ if_not_allow_credentials(Req, State = #state{origin = Origin}) ->
 
 %% exposed_headers/2 should return a list of binary header names.
 exposed_headers(Req, State) ->
-    case call(Req, State, cors_exposed_headers) of
+    case call(Req, State, exposed_headers) of
         no_call ->
             terminate(Req, State);
         {List, Req1, PolicyState} ->
