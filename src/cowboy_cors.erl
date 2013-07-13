@@ -126,8 +126,6 @@ allowed_headers(Req, State = #state{request_headers = Requested}) ->
 
 check_allowed_headers([], _, Req, State) ->
     set_preflight_headers(Req, State);
-check_allowed_headers(_, [], Req, State) ->
-    terminate(Req, State);
 check_allowed_headers([<<"origin">>|Tail], Allowed, Req, State) ->
     %% KLUDGE: for browsers that include this header, but don't
     %% actually check it (i.e. Webkit).  Given that the 'Origin'
