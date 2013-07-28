@@ -17,8 +17,8 @@
 -export([standard_options/1]).
 -export([simple_allowed_get/1]).
 -export([simple_allowed_credentials_get/1]).
+-export([actual_options/1]).
 -export([preflight_method/1]).
--export([preflight_no_method/1]).
 -export([preflight_allowed_method/1]).
 -export([preflight_credentials/1]).
 -export([preflight_header/1]).
@@ -37,9 +37,7 @@ groups() ->
                             standard_no_origin_get,
                             standard_no_origin_options,
                             standard_get,
-                            standard_options,
-                            preflight_method,
-                            preflight_header
+                            standard_options
                            ]},
      {policy, [parallel], [
                            standard_no_origin_get,
@@ -48,8 +46,8 @@ groups() ->
                            standard_options,
                            simple_allowed_get,
                            simple_allowed_credentials_get,
+                           actual_options,
                            preflight_method,
-                           preflight_no_method,
                            preflight_allowed_method,
                            preflight_credentials,
                            preflight_allowed_header,
@@ -107,26 +105,26 @@ preflight(Headers, Config) ->
 %% Tests
 
 standard_no_origin_get(Config) ->
-    {ok, 200, Headers, _} = request(<<"GET">>, [], Config),
+    {ok, 204, Headers, _} = request(<<"GET">>, [], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 standard_no_origin_options(Config) ->
-    {ok, 200, Headers, _} = request(<<"OPTIONS">>, [], Config),
+    {ok, 204, Headers, _} = request(<<"OPTIONS">>, [], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 standard_get(Config) ->
     Origin = <<"http://banned.example.com">>,
-    {ok, 200, Headers, _} = request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
+    {ok, 204, Headers, _} = request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 standard_options(Config) ->
     Origin = <<"http://banned.example.com">>,
-    {ok, 200, Headers, _} = request(<<"OPTIONS">>, [{<<"Origin">>, Origin}], Config),
+    {ok, 204, Headers, _} = request(<<"OPTIONS">>, [{<<"Origin">>, Origin}], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 simple_allowed_get(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"x-exposed">>} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
@@ -134,20 +132,20 @@ simple_allowed_get(Config) ->
 
 simple_allowed_credentials_get(Config) ->
     Origin = <<"http://credentials.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"x-exposed">>} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
     {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
 
-preflight_no_method(Config) ->
+actual_options(Config) ->
+    %% OPTIONS request without Access-Control-Request-Method is not a pre-flight request.
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([{<<"Origin">>, Origin}], Config),
-    false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    %% Ensure OPTIONS request was handled.
+    {_, <<"exposed">>} = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
 preflight_method(Config) ->
     Origin = <<"http://allowed.example.com">>,
@@ -156,7 +154,9 @@ preflight_method(Config) ->
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
 preflight_allowed_method(Config) ->
     Origin = <<"http://allowed.example.com">>,
@@ -165,7 +165,9 @@ preflight_allowed_method(Config) ->
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
 preflight_credentials(Config) ->
     Origin = <<"http://credentials.example.com">>,
@@ -174,7 +176,9 @@ preflight_credentials(Config) ->
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
 preflight_header(Config) ->
     Origin = <<"http://allowed.example.com">>,
@@ -188,7 +192,9 @@ preflight_header(Config) ->
     false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
 preflight_allowed_header(Config) ->
     Origin = <<"http://allowed.example.com">>,
@@ -202,7 +208,9 @@ preflight_allowed_header(Config) ->
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     {_, <<"X-Requested">>} = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
 %% Test for Webkit browsers requesting 'Origin' header.
 preflight_allowed_header_webkit(Config) ->
@@ -217,4 +225,7 @@ preflight_allowed_header_webkit(Config) ->
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     {_, <<"origin, x-requested">>} = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
+
