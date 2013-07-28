@@ -165,13 +165,9 @@ if_not_allow_credentials(Req, State = #state{origin = Origin}) ->
 
 %% exposed_headers/2 should return a list of binary header names.
 exposed_headers(Req, State) ->
-    case call(Req, State, exposed_headers) of
-        no_call ->
-            terminate(Req, State);
-        {List, Req1, PolicyState} ->
-            Req2 = set_exposed_headers(Req1, List),
-            terminate(Req2, State#state{policy_state = PolicyState})
-    end.
+    {List, Req1, PolicyState} = call(Req, State, exposed_headers, []),
+    Req2 = set_exposed_headers(Req1, List),
+    terminate(Req2, State#state{policy_state = PolicyState}).
 
 set_exposed_headers(Req, []) ->
     Req;
@@ -186,9 +182,6 @@ expect(Req, State, Callback, Expected, OnTrue, OnFalse) ->
         {_Unexpected, Req1, PolicyState} ->
             OnFalse(Req1, State#state{policy_state = PolicyState})
     end.
-
-call(Req, State, Callback) ->
-    call(Req, State, Callback, no_call).
 
 call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback, Default) ->
     case erlang:function_exported(Policy, Callback, 2) of
