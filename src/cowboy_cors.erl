@@ -11,6 +11,7 @@
 
 -record(state, {
           env                  :: cowboy_middleware:env(),
+          method               :: binary(),
           origin               :: binary(),
           request_method       :: binary(),
           request_headers = [] :: [binary()],
@@ -23,7 +24,8 @@
 %% @private
 execute(Req, Env) ->
     {_, Policy} = lists:keyfind(cors_policy, 1, Env),
-    origin_present(Req, #state{env = Env, policy = Policy}).
+    {Method, Req1} = cowboy_req:method(Req),
+    origin_present(Req1, #state{env = Env, policy = Policy, method = Method}).
 
 %% CORS specification only applies to requests with an `Origin' header.
 origin_present(Req, State) ->
@@ -52,32 +54,16 @@ allowed_origins(Req, State = #state{origin = Origin}) ->
     {List, Req1, PolicyState} = call(Req, State, allowed_origins, []),
     case lists:member(Origin, List) of
         true ->
-            %% both models are identical prior to this point
-            choose_processing_model(Req1, State#state{policy_state = PolicyState});
+            request_method(Req1, State#state{policy_state = PolicyState});
         false ->
             terminate(Req, State#state{policy_state = PolicyState})
     end.
 
-%% select either simple or preflight request processing model
-choose_processing_model(Req, State) ->
-    case cowboy_req:method(Req) of
-        {<<"OPTIONS">>, Req1} ->
-            preflight_model(Req1, State);
-        {_Method, Req1} ->
-            simple_model(Req1, State)
-    end.
-
-preflight_model(Req, State) ->
-    request_method(Req, State).
-
-simple_model(Req, State) ->
-    {Req1, State1} = allow_credentials(Req, State),
-    exposed_headers(Req1, State1).
-
-request_method(Req, State) ->
+request_method(Req, State = #state{method = <<"OPTIONS">>}) ->
     case cowboy_req:header(<<"access-control-request-method">>, Req) of
         {undefined, Req1} ->
-            terminate(Req1, State);
+            %% This is not a pre-flight request, but an actual request.
+            exposed_headers(Req1, State);
         {Data, Req1} ->
             cowboy_http:token(Data,
                               fun(<<>>, Method) ->
@@ -85,7 +71,9 @@ request_method(Req, State) ->
                                  (_, _) ->
                                       terminate(Req1, State)
                               end)
-    end.
+    end;
+request_method(Req, State) ->
+    exposed_headers(Req, State).
 
 request_headers(Req, State) ->
     {Headers, Req1} = cowboy_req:header(<<"access-control-request-headers">>, Req, <<>>),
@@ -111,7 +99,7 @@ allowed_headers(Req, State = #state{request_headers = Requested}) ->
     check_allowed_headers(Requested, List, Req1, State#state{policy_state = PolicyState}).
 
 check_allowed_headers([], _, Req, State) ->
-    set_preflight_headers(Req, State);
+    set_allow_methods(Req, State);
 check_allowed_headers([<<"origin">>|Tail], Allowed, Req, State) ->
     %% KLUDGE: for browsers that include this header, but don't
     %% actually check it (i.e. Webkit).  Given that the 'Origin'
@@ -126,10 +114,6 @@ check_allowed_headers([Header|Tail], Allowed, Req, State) ->
             check_allowed_headers(Tail, Allowed, Req, State)
     end.
 
-set_preflight_headers(Req, State) ->
-    {Req1, State1} = allow_credentials(Req, State),
-    set_allow_methods(Req1, State1).
-
 set_allow_methods(Req, State = #state{request_method = Method}) ->
     Req1 = cowboy_req:set_resp_header(<<"access-control-allow-methods">>, Method, Req),
     set_allow_headers(Req1, State).
@@ -139,11 +123,23 @@ set_allow_headers(Req, State) ->
     %% simply reflect the list back to the client.
     case cowboy_req:header(<<"access-control-request-headers">>, Req) of
         {undefined, Req1} ->
-            terminate(Req1, State);
+            allow_credentials(Req1, State);
         {Headers, Req1} ->
             Req2 = cowboy_req:set_resp_header(<<"access-control-allow-headers">>, Headers, Req1),
-            terminate(Req2, State)
+            allow_credentials(Req2, State)
     end.
+
+%% exposed_headers/2 should return a list of binary header names.
+exposed_headers(Req, State) ->
+    {List, Req1, PolicyState} = call(Req, State, exposed_headers, []),
+    Req2 = set_exposed_headers(Req1, List),
+    allow_credentials(Req2, State#state{policy_state = PolicyState}).
+
+set_exposed_headers(Req, []) ->
+    Req;
+set_exposed_headers(Req, [Header|Tail]) ->
+    Req1 = cowboy_req:set_resp_header(<<"access-control-expose-headers">>, Header, Req),
+    set_exposed_headers(Req1, Tail).
 
 %% allow_credentials/1 should return true or false.
 allow_credentials(Req, State) ->
@@ -156,24 +152,12 @@ if_allow_credentials(Req, State = #state{origin = Origin}) ->
     Req1 = cowboy_req:set_resp_header(<<"access-control-allow-origin">>, Origin, Req),
     Req2 = cowboy_req:set_resp_header(<<"access-control-allow-credentials">>, <<"true">>, Req1),
     Req3 = cowboy_req:set_resp_header(<<"vary">>, <<"origin">>, Req2),
-    {Req3, State}.
+    terminate(Req3, State).
 
 if_not_allow_credentials(Req, State = #state{origin = Origin}) ->
     Req1 = cowboy_req:set_resp_header(<<"access-control-allow-origin">>, Origin, Req),
     Req2 = cowboy_req:set_resp_header(<<"vary">>, <<"origin">>, Req1),
-    {Req2, State}.
-
-%% exposed_headers/2 should return a list of binary header names.
-exposed_headers(Req, State) ->
-    {List, Req1, PolicyState} = call(Req, State, exposed_headers, []),
-    Req2 = set_exposed_headers(Req1, List),
-    terminate(Req2, State#state{policy_state = PolicyState}).
-
-set_exposed_headers(Req, []) ->
-    Req;
-set_exposed_headers(Req, [Header|Tail]) ->
-    Req1 = cowboy_req:set_resp_header(<<"access-control-expose-headers">>, Header, Req),
-    set_exposed_headers(Req1, Tail).
+    terminate(Req2, State).
 
 expect(Req, State, Callback, Expected, OnTrue, OnFalse) ->
     case call(Req, State, Callback, Expected) of

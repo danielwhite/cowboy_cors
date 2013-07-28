@@ -17,8 +17,8 @@
 -export([standard_options/1]).
 -export([simple_allowed_get/1]).
 -export([simple_allowed_credentials_get/1]).
+-export([actual_options/1]).
 -export([preflight_method/1]).
--export([preflight_no_method/1]).
 -export([preflight_allowed_method/1]).
 -export([preflight_credentials/1]).
 -export([preflight_header/1]).
@@ -48,8 +48,8 @@ groups() ->
                            standard_options,
                            simple_allowed_get,
                            simple_allowed_credentials_get,
+                           actual_options,
                            preflight_method,
-                           preflight_no_method,
                            preflight_allowed_method,
                            preflight_credentials,
                            preflight_allowed_header,
@@ -140,14 +140,12 @@ simple_allowed_credentials_get(Config) ->
     {_, <<"x-exposed">>} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
     {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
 
-preflight_no_method(Config) ->
+actual_options(Config) ->
+    %% OPTIONS request without Access-Control-Request-Method is not a pre-flight request.
     Origin = <<"http://allowed.example.com">>,
     {ok, 204, Headers, _} =
         preflight([{<<"Origin">>, Origin}], Config),
-    false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
-    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers).
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 preflight_method(Config) ->
     Origin = <<"http://allowed.example.com">>,
