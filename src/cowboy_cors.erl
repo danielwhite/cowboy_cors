@@ -15,6 +15,7 @@
           origin               :: binary(),
           request_method       :: binary(),
           request_headers = [] :: [binary()],
+          preflight = false    :: boolean(),
 
           %% Policy handler.
           policy               :: atom(),
@@ -67,7 +68,8 @@ request_method(Req, State = #state{method = <<"OPTIONS">>}) ->
         {Data, Req1} ->
             cowboy_http:token(Data,
                               fun(<<>>, Method) ->
-                                      request_headers(Req1, State#state{request_method = Method});
+                                      request_headers(Req1, State#state{preflight = true,
+                                                                        request_method = Method});
                                  (_, _) ->
                                       terminate(Req1, State)
                               end)
@@ -185,6 +187,8 @@ call(Req, State = #state{policy = Policy, policy_state = PolicyState}, Callback,
             {Default, Req, PolicyState}
     end.
 
+terminate(Req, #state{preflight = true}) ->
+    {error, 200, Req};
 terminate(Req, #state{env = Env}) ->
     {ok, Req, Env}.
 
