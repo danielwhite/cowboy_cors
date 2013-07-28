@@ -107,26 +107,26 @@ preflight(Headers, Config) ->
 %% Tests
 
 standard_no_origin_get(Config) ->
-    {ok, 200, Headers, _} = request(<<"GET">>, [], Config),
+    {ok, 204, Headers, _} = request(<<"GET">>, [], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 standard_no_origin_options(Config) ->
-    {ok, 200, Headers, _} = request(<<"OPTIONS">>, [], Config),
+    {ok, 204, Headers, _} = request(<<"OPTIONS">>, [], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 standard_get(Config) ->
     Origin = <<"http://banned.example.com">>,
-    {ok, 200, Headers, _} = request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
+    {ok, 204, Headers, _} = request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 standard_options(Config) ->
     Origin = <<"http://banned.example.com">>,
-    {ok, 200, Headers, _} = request(<<"OPTIONS">>, [{<<"Origin">>, Origin}], Config),
+    {ok, 204, Headers, _} = request(<<"OPTIONS">>, [{<<"Origin">>, Origin}], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers).
 
 simple_allowed_get(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"x-exposed">>} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
@@ -134,7 +134,7 @@ simple_allowed_get(Config) ->
 
 simple_allowed_credentials_get(Config) ->
     Origin = <<"http://credentials.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         request(<<"GET">>, [{<<"Origin">>, Origin}], Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"x-exposed">>} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
@@ -142,7 +142,7 @@ simple_allowed_credentials_get(Config) ->
 
 preflight_no_method(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([{<<"Origin">>, Origin}], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
@@ -151,7 +151,7 @@ preflight_no_method(Config) ->
 
 preflight_method(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([{<<"Origin">>, Origin}, {<<"Access-Control-Request-Method">>, <<"DELETE">>}], Config),
     false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
@@ -160,7 +160,7 @@ preflight_method(Config) ->
 
 preflight_allowed_method(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([{<<"Origin">>, Origin}, {<<"Access-Control-Request-Method">>, <<"PUT">>}], Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
@@ -169,7 +169,7 @@ preflight_allowed_method(Config) ->
 
 preflight_credentials(Config) ->
     Origin = <<"http://credentials.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([{<<"Origin">>, Origin}, {<<"Access-Control-Request-Method">>, <<"PUT">>}], Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
@@ -178,7 +178,7 @@ preflight_credentials(Config) ->
 
 preflight_header(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([
                    {<<"Origin">>, Origin},
                    {<<"Access-Control-Request-Method">>, <<"PUT">>},
@@ -192,7 +192,7 @@ preflight_header(Config) ->
 
 preflight_allowed_header(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([
                    {<<"Origin">>, Origin},
                    {<<"Access-Control-Request-Method">>, <<"PUT">>},
@@ -207,7 +207,7 @@ preflight_allowed_header(Config) ->
 %% Test for Webkit browsers requesting 'Origin' header.
 preflight_allowed_header_webkit(Config) ->
     Origin = <<"http://allowed.example.com">>,
-    {ok, 200, Headers, _} =
+    {ok, 204, Headers, _} =
         preflight([
                    {<<"Origin">>, Origin},
                    {<<"Access-Control-Request-Method">>, <<"PUT">>},

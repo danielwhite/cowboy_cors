@@ -8,7 +8,7 @@ init(_Transport, Req, _Opts) ->
 
 handle(Req, State) ->
     Headers = [{<<"X-Exposed">>, <<"exposed">>}, {<<"X-Hidden">>, <<"hidden">>}],
-    {ok, Req1} = cowboy_req:reply(200, Headers, <<"ok">>, Req),
+    {ok, Req1} = cowboy_req:reply(204, Headers, [], Req),
     {ok, Req1, State}.
 
 terminate(_Reason, _Req, _State) ->
