@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/danielwhite/cowboy_cors.png?branch=master)](https://travis-ci.org/danielwhite/cowboy_cors)
+
 A [cowboy](https://github.com/extend/cowboy) middleware implementation
 of the W3C Cross-Origin Resource Sharing specification.
 
