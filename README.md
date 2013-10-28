@@ -5,9 +5,6 @@ The [W3C Candidate Recommendation 29 January
 2013](http://www.w3.org/TR/2013/CR-cors-20130129/) is the reference
 for the current implementation.
 
-Currently, the middleware only supports simple cross-origin requests
-and actual requests.
-
 # Configuration
 
 The CORS middleware requires the `cors_policy` value.  This value
