@@ -50,6 +50,7 @@ groups() ->
                            preflight_method,
                            preflight_allowed_method,
                            preflight_credentials,
+                           preflight_header,
                            preflight_allowed_header,
                            preflight_allowed_header_webkit
                           ]}
