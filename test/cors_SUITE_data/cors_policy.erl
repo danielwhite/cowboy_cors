@@ -12,25 +12,40 @@ policy_init(Req) ->
     {ok, Req, undefined_state}.
 
 allowed_origins(Req, State) ->
-    Allowed = [
-               <<"http://allowed.example.com">>,
-               <<"http://credentials.example.com">>
-              ],
-    {Allowed, Req, State}.
+    {Allowed, Req1} = parse_list(<<"allowed_origins">>, Req),
+    {Allowed, Req1, State}.
 
 allow_credentials(Req, State) ->
-    case cowboy_req:header(<<"origin">>, Req) of
-        {<<"http://credentials.example.com">>, Req1} ->
-            {true, Req1, State};
-        {_, Req1} ->
-            {false, Req1, State}
-    end.
+    {IsAllowed, Req1} = parse_boolean(<<"allow_credentials">>, Req, false),
+    {IsAllowed, Req1, State}.
 
 exposed_headers(Req, State) ->
-    {[<<"x-exposed">>], Req, State}.
+    {Exposed, Req1} = parse_list(<<"exposed_headers">>, Req),
+    {Exposed, Req1, State}.
 
 allowed_headers(Req, State) ->
-    {[<<"x-requested">>], Req, State}.
+    {Allowed, Req1} = parse_list(<<"allowed_headers">>, Req),
+    {Allowed, Req1, State}.
 
 allowed_methods(Req, State) ->
-    {[<<"GET">>, <<"POST">>, <<"PUT">>], Req, State}.
+    {Allowed, Req1} = parse_list(<<"allowed_methods">>, Req),
+    {Allowed, Req1, State}.
+
+parse_list(Name, Req) ->
+    case cowboy_req:qs_val(Name, Req) of
+        {undefined, Req1} ->
+            {[], Req1};
+        {Bin, Req1} ->
+            List = binary:split(Bin, <<",">>, [global]),
+            {List, Req1}
+    end.
+
+parse_boolean(Name, Req, Default) ->
+    case cowboy_req:qs_val(Name, Req) of
+        {undefined, Req1} ->
+            {Default, Req1};
+        {<<"true">>, Req1} ->
+            {true, Req1};
+        {<<"false">>, Req1} ->
+            {false, Req1}
+    end.
