@@ -19,17 +19,61 @@ A number of optional callbacks can be implemented in the policy
 module.  Each callback should accept the Req object and the State as
 arguments, and return a three-tuple of the from `{Value, Req, State}`.
 
-| Callback name          | Default value             |
-| ---------------------- | ------------------------- |
-| allowed_origins        | `[]`                      |
-| allow_credentials      | `false`                   |
-| exposed_headers        | `[]`                      |
-| allowed_headers        | `[]`                      |
-| allowed_methods        | `[]`                      |
-| max_age                | `undefined`               |
+## Descriptions
 
-# Todo
+### allowed_origins
 
+> * Value type: '*' | [binary()]
+> * Default value: []
 
-* Allow individual handlers to provide policy, rather than just a
-  global policy.
+Return the list of [allowed
+origins](http://www.w3.org/TR/2013/CR-cors-20130129/#access-control-allow-origin-response-header).
+
+This may optionally return the atom `'*'` to allow requests from any
+origin.  In this case, the value of the `Access-Control-Allow-Origin`
+header will be the origin of the request rather than a value of "*".
+
+### allow_credentials
+
+> * Value type: boolean()
+> * Default value: false
+
+Return whether the resource [supports user
+credentials](http://www.w3.org/TR/2013/CR-cors-20130129/#supports-credentials).
+
+### exposed_headers
+
+> * Value type: [binary()]
+> * Default value: []
+
+Return a [list of header
+names](http://www.w3.org/TR/2013/CR-cors-20130129/#list-of-exposed-headers)
+that can be exposed to the client.
+
+### allowed_headers
+
+> * Value type: [binary()]
+> * Default value: []
+
+Return a [list of header
+names](http://www.w3.org/TR/2013/CR-cors-20130129/#list-of-headers)
+that are supported by the resource.
+
+### allowed_methods
+
+> * Value type: [binary()]
+> * Default value: []
+
+Return a [list of
+methods](http://www.w3.org/TR/2013/CR-cors-20130129/#list-of-methods)
+that the resource supports.
+
+### max_age
+
+> * Value type: non_neg_integer() | undefined
+> * Default value: undefined
+
+Return the [maximum
+time](http://www.w3.org/TR/2013/CR-cors-20130129/#http-access-control-max-age)
+(in seconds) that the results of a preflight request can be cached by
+the client.
