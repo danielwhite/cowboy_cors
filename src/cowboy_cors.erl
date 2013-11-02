@@ -139,9 +139,9 @@ exposed_headers(Req, State) ->
 
 set_exposed_headers(Req, []) ->
     Req;
-set_exposed_headers(Req, [Header|Tail]) ->
-    Req1 = cowboy_req:set_resp_header(<<"access-control-expose-headers">>, Header, Req),
-    set_exposed_headers(Req1, Tail).
+set_exposed_headers(Req, Headers) ->
+    Bin = header_list(Headers),
+    cowboy_req:set_resp_header(<<"access-control-expose-headers">>, Bin, Req).
 
 %% allow_credentials/1 should return true or false.
 allow_credentials(Req, State) ->
@@ -195,3 +195,12 @@ terminate(Req, #state{env = Env}) ->
 -spec error_terminate(cowboy_req:req(), #state{}) -> no_return().
 error_terminate(_Req, _State) ->
     erlang:throw({?MODULE, error}).
+
+%% create a comma-separated list for a header value
+header_list(Values) ->
+    header_list(Values, <<>>).
+
+header_list([Value], Acc) ->
+    <<Acc/binary, Value/binary>>;
+header_list([Value | Rest], Acc) ->
+    header_list(Rest, <<Acc/binary, Value/binary, ",">>).
