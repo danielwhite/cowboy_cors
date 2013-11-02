@@ -17,6 +17,7 @@
 -export([standard_options/1]).
 -export([simple_allowed_get/1]).
 -export([simple_allowed_credentials_get/1]).
+-export([simple_exposed_headers/1]).
 -export([actual_options/1]).
 -export([preflight_method/1]).
 -export([preflight_allowed_method/1]).
@@ -46,6 +47,7 @@ groups() ->
                            standard_options,
                            simple_allowed_get,
                            simple_allowed_credentials_get,
+                           simple_exposed_headers,
                            actual_options,
                            preflight_method,
                            preflight_allowed_method,
@@ -167,6 +169,21 @@ simple_allowed_credentials_get(Config) ->
                 Config),
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
+
+simple_exposed_headers(Config) ->
+    Origin = <<"http://example.com">>,
+    Exposed = [<<"x-first">>, <<"x-second">>],
+    {ok, 204, Headers, _} =
+        request(<<"GET">>,
+                [{<<"Origin">>, Origin}],
+                [{allowed_origins, Origin},
+                 {allowed_methods, <<"GET">>},
+                 {exposed_headers, Exposed}],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, ExposedList} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    Exposed = cowboy_http:nonempty_list(ExposedList, fun cowboy_http:token/2),
+    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
 
 actual_options(Config) ->
     %% OPTIONS request without Access-Control-Request-Method is not a pre-flight request.
