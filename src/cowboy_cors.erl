@@ -51,13 +51,18 @@ policy_init(Req, State = #state{policy = Policy}) ->
             error_terminate(Req, State)
     end.
 
+%% allowed_origins/2 should return a list of origins or the atom '*'
 allowed_origins(Req, State = #state{origin = Origin}) ->
-    {List, Req1, PolicyState} = call(Req, State, allowed_origins, []),
-    case lists:member(Origin, List) of
-        true ->
+    case call(Req, State, allowed_origins, []) of
+        {'*', Req1, PolicyState} ->
             request_method(Req1, State#state{policy_state = PolicyState});
-        false ->
-            terminate(Req, State#state{policy_state = PolicyState})
+        {List, Req1, PolicyState} ->
+            case lists:member(Origin, List) of
+                true ->
+                    request_method(Req1, State#state{policy_state = PolicyState});
+                false ->
+                    terminate(Req, State#state{policy_state = PolicyState})
+            end
     end.
 
 request_method(Req, State = #state{method = <<"OPTIONS">>}) ->
@@ -157,6 +162,9 @@ if_allow_credentials(Req, State = #state{origin = Origin}) ->
     terminate(Req3, State).
 
 if_not_allow_credentials(Req, State = #state{origin = Origin}) ->
+    %% To simplify conformance with the requirement that "*" is only
+    %% valid if credentials are not allowed, we will only ever return
+    %% the origin of the request.
     Req1 = cowboy_req:set_resp_header(<<"access-control-allow-origin">>, Origin, Req),
     Req2 = cowboy_req:set_resp_header(<<"vary">>, <<"origin">>, Req1),
     terminate(Req2, State).

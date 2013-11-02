@@ -12,8 +12,12 @@ policy_init(Req) ->
     {ok, Req, undefined_state}.
 
 allowed_origins(Req, State) ->
-    {Allowed, Req1} = parse_list(<<"allowed_origins">>, Req),
-    {Allowed, Req1, State}.
+    case parse_list(<<"allowed_origins">>, Req) of
+        {[<<"*">>], Req1} ->
+            {'*', Req1, State};
+        {Allowed, Req1} ->
+            {Allowed, Req1, State}
+    end.
 
 allow_credentials(Req, State) ->
     {IsAllowed, Req1} = parse_boolean(<<"allow_credentials">>, Req, false),

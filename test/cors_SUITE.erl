@@ -16,12 +16,16 @@
 -export([standard_get/1]).
 -export([standard_options/1]).
 -export([simple_allowed_get/1]).
+-export([simple_wildcard_get/1]).
 -export([simple_allowed_credentials_get/1]).
+-export([simple_allowed_credentials_with_wildcard_origin/1]).
 -export([simple_exposed_headers/1]).
 -export([actual_options/1]).
 -export([preflight_method/1]).
 -export([preflight_allowed_method/1]).
 -export([preflight_credentials/1]).
+-export([preflight_wildcard_origin/1]).
+-export([preflight_credentials_with_wildcard_origin/1]).
 -export([preflight_header/1]).
 -export([preflight_allowed_header/1]).
 -export([preflight_allowed_header_webkit/1]).
@@ -46,12 +50,16 @@ groups() ->
                            standard_get,
                            standard_options,
                            simple_allowed_get,
+                           simple_wildcard_get,
                            simple_allowed_credentials_get,
+                           simple_allowed_credentials_with_wildcard_origin,
                            simple_exposed_headers,
                            actual_options,
                            preflight_method,
                            preflight_allowed_method,
                            preflight_credentials,
+                           preflight_wildcard_origin,
+                           preflight_credentials_with_wildcard_origin,
                            preflight_header,
                            preflight_allowed_header,
                            preflight_allowed_header_webkit
@@ -159,6 +167,16 @@ simple_allowed_get(Config) ->
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
 
+simple_wildcard_get(Config) ->
+    Origin = <<"http://example.com">>,
+    {ok, 204, Headers, _} =
+        request(<<"GET">>,
+                [{<<"Origin">>, Origin}],
+                [{allowed_origins, "*"}],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
+
 simple_allowed_credentials_get(Config) ->
     Origin = <<"http://example.com">>,
     {ok, 204, Headers, _} =
@@ -167,6 +185,18 @@ simple_allowed_credentials_get(Config) ->
                 [{allowed_origins, Origin},
                  {allow_credentials, true}],
                 Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
+
+simple_allowed_credentials_with_wildcard_origin(Config) ->
+    Origin = <<"http://example.com">>,
+    {ok, 204, Headers, _} =
+        request(<<"GET">>,
+                [{<<"Origin">>, Origin}],
+                [{allowed_origins, "*"},
+                 {allow_credentials, true}],
+                Config),
+    %% We MUST not see "*" as the value for this header if credentials are allowed.
     {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
     {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers).
 
@@ -242,6 +272,41 @@ preflight_credentials(Config) ->
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
     false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
+
+preflight_wildcard_origin(Config) ->
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>}],
+                [{allowed_origins, "*"},
+                 {allowed_methods, <<"PUT">>}],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-max-age">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers).
+
+preflight_credentials_with_wildcard_origin(Config) ->
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>}],
+                [{allowed_origins, "*"},
+                 {allow_credentials, true},
+                 {allowed_methods, <<"PUT">>}],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-max-age">>, 1, Headers),
     %% Pre-flight requests should not be completed by the handler.
     false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
