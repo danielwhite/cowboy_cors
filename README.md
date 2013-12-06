@@ -26,10 +26,10 @@ arguments, and return a three-tuple of the from `{Value, Req, State}`.
 | exposed_headers        | `[]`                      |
 | allowed_headers        | `[]`                      |
 | allowed_methods        | `[]`                      |
+| max_age                | `undefined`               |
 
 # Todo
 
 
-* Provide callback to set the `Access-Control-Max-Age` header.
 * Allow individual handlers to provide policy, rather than just a
   global policy.

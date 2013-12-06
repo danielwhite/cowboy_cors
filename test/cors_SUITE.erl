@@ -29,6 +29,8 @@
 -export([preflight_header/1]).
 -export([preflight_allowed_header/1]).
 -export([preflight_allowed_header_webkit/1]).
+-export([preflight_max_age/1]).
+-export([preflight_invalid_max_age/1]).
 
 all() ->
     [
@@ -62,7 +64,9 @@ groups() ->
                            preflight_credentials_with_wildcard_origin,
                            preflight_header,
                            preflight_allowed_header,
-                           preflight_allowed_header_webkit
+                           preflight_allowed_header_webkit,
+                           preflight_max_age,
+                           preflight_invalid_max_age
                           ]}
     ].
 
@@ -119,8 +123,10 @@ build_param({Name, Value}) ->
 
 format_option(Bin) when is_binary(Bin) ->
     cowboy_http:urlencode(Bin);
-format_option(Bool) when is_boolean(Bool) ->
-    io_lib:fwrite("~p", [Bool]);
+format_option(Value)
+  when is_boolean(Value);
+       is_integer(Value) ->
+    io_lib:fwrite("~p", [Value]);
 format_option(List) when is_list(List) ->
     IoList = lists:map(fun(X) -> [",", X] end, List),
     <<",", Bin/binary>> = iolist_to_binary(IoList),
@@ -255,6 +261,7 @@ preflight_allowed_method(Config) ->
     {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
     false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
     false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-max-age">>, 1, Headers),
     %% Pre-flight requests should not be completed by the handler.
     false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
@@ -368,3 +375,26 @@ preflight_allowed_header_webkit(Config) ->
     %% Pre-flight requests should not be completed by the handler.
     false = lists:keyfind(<<"x-exposed">>, 1, Headers).
 
+preflight_max_age(Config) ->
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>}],
+                [{allowed_origins, Origin},
+                 {allowed_methods, <<"PUT">>},
+                 {max_age, 30}],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"30">>} = lists:keyfind(<<"access-control-max-age">>, 1, Headers).
+
+preflight_invalid_max_age(Config) ->
+    Origin = <<"http://example.com">>,
+    {error, closed} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>}],
+                [{allowed_origins, Origin},
+                 {allowed_methods, <<"PUT">>},
+                 {max_age, -30}],
+                Config).
