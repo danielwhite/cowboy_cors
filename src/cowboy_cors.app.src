@@ -4,5 +4,6 @@
   {vsn, "0.3.0"},
   {modules, [cowboy_cors, cowboy_cors_policy]},
   {applications, [kernel, stdlib, cowboy]},
+  {registered, []},
   {env, []}
  ]}.
