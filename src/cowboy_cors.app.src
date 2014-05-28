@@ -2,7 +2,8 @@
  [
   {description, "Cross-Origin Resource Sharing middleware for cowboy"},
   {vsn, "0.3.0"},
-  {modules, [cowboy_cors, cowboy_cors_policy]},
+  {modules, []},
   {applications, [kernel, stdlib, cowboy]},
+  {registered, []},
   {env, []}
  ]}.
