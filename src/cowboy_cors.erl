@@ -125,6 +125,9 @@ check_allowed_headers([<<"origin">>|Tail], Allowed, Req, State) ->
     %% header underpins the entire CORS framework, its inclusion in
     %% the requested headers is nonsensical.
     check_allowed_headers(Tail, Allowed, Req, State);
+check_allowed_headers([<<"accept">>|Tail], Allowed, Req, State) ->
+    %% KLUDGE: for browsers that include this header.
+    check_allowed_headers(Tail, Allowed, Req, State);
 check_allowed_headers([Header|Tail], Allowed, Req, State) ->
     case lists:member(Header, Allowed) of
         false ->
