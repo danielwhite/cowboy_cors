@@ -31,11 +31,21 @@
 -export([preflight_allowed_header_webkit/1]).
 -export([preflight_max_age/1]).
 -export([preflight_invalid_max_age/1]).
+%% Config cors policy
+-export([origin_whitelist_allowed_all/1]).
+-export([origin_whitelist_unavail/1]).
+-export([origin_whitelist_not_member/1]).
+-export([credential_enabled/1]).
+-export([request_headers_not_allowed/1]).
+-export([request_methods_not_allowed/1]).
+-export([exposed_headers_config/1]).
+-export([max_age_enabled/1]).
 
 all() ->
     [
      {group, default},
-     {group, policy}
+     {group, policy},
+     {group, cors_config_policy}
     ].
 
 groups() ->
@@ -67,16 +77,34 @@ groups() ->
                            preflight_allowed_header_webkit,
                            preflight_max_age,
                            preflight_invalid_max_age
-                          ]}
+                          ]},
+     {cors_config_policy, [],
+      [
+       standard_no_origin_get,
+       standard_no_origin_options,
+       standard_get,
+       standard_options,
+       %% Origin whitelist
+       origin_whitelist_allowed_all,
+       origin_whitelist_unavail,
+       origin_whitelist_not_member,
+       credential_enabled,
+       request_headers_not_allowed,
+       request_methods_not_allowed,
+       exposed_headers_config,
+       max_age_enabled
+      ]}
     ].
 
 init_per_suite(Config) ->
     application:start(crypto),
     application:start(ranch),
     application:start(cowboy),
+    application:start(cowboy_cors),
     Config.
 
 end_per_suite(_Config) ->
+    application:stop(cowboy_cors),
     application:stop(cowboy),
     application:stop(ranch),
     application:stop(crypto),
@@ -96,6 +124,17 @@ init_per_group(policy = Name, Config) ->
            {handler_opts, []},
            {cors_policy, cors_policy}],
     {ok, _} = cowboy:start_http(Name, 100, [{port, 0}], [{env, Env}, {middlewares, Middlewares}]),
+    Port = ranch:get_port(Name),
+    [{port, Port} | Config];
+
+init_per_group(cors_config_policy = Name, Config) ->
+    Middlewares = [cowboy_cors, cowboy_handler],
+    Env = [{handler, cors_handler},
+           {handler_opts, []},
+           {cors_policy, cowboy_cors_policy}],
+    {ok, _} = cowboy:start_http(Name, 100, [{port, 0}],
+                                [{env, Env},
+                                 {middlewares, Middlewares}]),
     Port = ranch:get_port(Name),
     [{port, Port} | Config].
 
@@ -137,11 +176,20 @@ request(Method, Headers, Options, Config) ->
     Url = build_url(<<"/">>, Options, Config),
     ct:pal("Sending request to ~p", [Url]),
     {ok, Client2} = cowboy_client:request(Method, Url, Headers, Client),
-    cowboy_client:response(Client2).
+    Resp = cowboy_client:response(Client2),
+    ct:pal("Receiving response: ~p", [Resp]),
+    Resp.
 
 request(Method, Headers, Config) ->
     request(Method, Headers, [], Config).
 
+get_all_env() ->
+    application:get_all_env(cowboy_cors).
+
+set_all_env(Params) ->
+    lists:foreach(fun({Key, Value}) ->
+                          application:set_env(cowboy_cors, Key, Value)
+                  end, Params).
 %% Tests
 
 standard_no_origin_get(Config) ->
@@ -398,3 +446,180 @@ preflight_invalid_max_age(Config) ->
                  {allowed_methods, <<"PUT">>},
                  {max_age, -30}],
                 Config).
+
+%% Test for configuration cors policy
+origin_whitelist_allowed_all(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    %% Set origin to '*'
+    ok = application:set_env(cowboy_cors, origin_whitelist, '*'),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"x-requested">>]),
+    ok = application:set_env(cowboy_cors, allowed_credential, false),
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    {_, <<"X-Requested">>} = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    %% Pre-flight requests should not be completed by the handler.
+    false = lists:keyfind(<<"x-exposed">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+origin_whitelist_unavail(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    %% Set origin to []
+    ok = application:set_env(cowboy_cors, origin_whitelist, []),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"x-requested">>]),
+    Origin = <<"http://example.com">>,
+    {ok, 204, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+origin_whitelist_not_member(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    ok = application:set_env(cowboy_cors, origin_whitelist, [<<"http://exam.com">>]),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"x-requested">>]),
+    Origin = <<"http://example.com">>,
+    {ok, 204, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+credential_enabled(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    %% Set origin to '*'
+    ok = application:set_env(cowboy_cors, origin_whitelist, '*'),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"x-requested">>]),
+    ok = application:set_env(cowboy_cors, allowed_credential, true),
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"PUT">>} = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    {_, <<"X-Requested">>} = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
+    {_, <<"true">>} = lists:keyfind(<<"access-control-allow-credentials">>, 1,
+                                    Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+request_headers_not_allowed(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    ok = application:set_env(cowboy_cors, origin_whitelist, '*'),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"authorization">>]),
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+request_methods_not_allowed(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    %% Set origin to '*'
+    ok = application:set_env(cowboy_cors, origin_whitelist, '*'),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"x-requested">>]),
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"GET">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    false = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-methods">>, 1, Headers),
+    false = lists:keyfind(<<"access-control-allow-headers">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+exposed_headers_config(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    Origin = <<"http://example.com">>,
+    Exposed = [<<"x-first">>, <<"x-second">>],
+    ok = application:set_env(cowboy_cors, origin_whitelist, [Origin]),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, exposed_headers, Exposed),
+
+    {ok, 204, Headers, _} =
+        request(<<"GET">>,
+                [{<<"Origin">>, Origin}],
+                [{allowed_origins, Origin},
+                 {allowed_methods, <<"PUT">>},
+                 {exposed_headers, [<<"x-second">>]}],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, ExposedList} = lists:keyfind(<<"access-control-expose-headers">>, 1, Headers),
+    Exposed = cowboy_http:nonempty_list(ExposedList, fun cowboy_http:token/2),
+    false = lists:keyfind(<<"access-control-allow-credentials">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
+
+max_age_enabled(Config) ->
+    %% Preconfig
+    OrigEnv = get_all_env(),
+    %% Set origin to '*'
+    ok = application:set_env(cowboy_cors, origin_whitelist, '*'),
+    ok = application:set_env(cowboy_cors, allowed_methods, [<<"PUT">>]),
+    ok = application:set_env(cowboy_cors, allowed_headers, [<<"x-requested">>]),
+    ok = application:set_env(cowboy_cors, max_age, 30),
+    Origin = <<"http://example.com">>,
+    {ok, 200, Headers, _} =
+        request(<<"OPTIONS">>,
+                [{<<"Origin">>, Origin},
+                 {<<"Access-Control-Request-Method">>, <<"PUT">>},
+                 {<<"Access-Control-Request-Headers">>, <<"X-Requested">>}],
+                [],
+                Config),
+    {_, Origin} = lists:keyfind(<<"access-control-allow-origin">>, 1, Headers),
+    {_, <<"30">>} = lists:keyfind(<<"access-control-max-age">>, 1, Headers),
+    %% Postconfig
+    set_all_env(OrigEnv).
